@@ -15,6 +15,9 @@ export const supabase = createSupabaseClient<Database>(supabaseUrl, supabaseKey,
   }
 })
 
+// 导出 createClient 函数（确保兼容性）
+export const createClient = () => supabase
+
 // 工具函数：处理 Supabase 错误
 export const handleSupabaseError = (error: any) => {
   console.error('Supabase error:', error)
