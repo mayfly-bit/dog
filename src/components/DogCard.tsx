@@ -62,8 +62,8 @@ export default function DogCard({ dog }: DogCardProps) {
         
         {/* 状态标签 */}
         <div className="absolute top-2 right-2">
-          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[dog.status]}`}>
-            {statusLabels[dog.status]}
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[dog.status || 'owned']}`}>
+            {statusLabels[dog.status || 'owned']}
           </span>
         </div>
       </div>
