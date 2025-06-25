@@ -1,20 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // 实验性功能配置
+  // 实验性功能配置（简化配置避免构建错误）
   experimental: {
-    // 启用服务端组件优化
-    optimizeCss: true,
-    // 启用 turbo 模式（如果可用）
-    turbo: {
-      loaders: {
-        '.svg': ['@svgr/webpack'],
-      },
-    },
+    // 暂时禁用可能导致构建错误的功能
+    // optimizeCss: true,
   },
 
-  // 编译器优化
+  // 编译器优化（简化配置）
   compiler: {
-    // 移除 console.log（生产环境）
+    // 生产环境移除console.log（但保留error和warn）
     removeConsole: process.env.NODE_ENV === 'production' ? {
       exclude: ['error', 'warn'],
     } : false,
@@ -65,34 +59,8 @@ const nextConfig = {
     ]
   },
 
-  // Webpack 配置优化
+  // Webpack 配置优化（简化配置）
   webpack: (config, { dev, isServer }) => {
-    // 生产环境优化
-    if (!dev) {
-      // 启用 SplitChunks 优化
-      config.optimization.splitChunks = {
-        chunks: 'all',
-        cacheGroups: {
-          default: false,
-          vendors: false,
-          // 第三方库单独打包
-          vendor: {
-            chunks: 'all',
-            test: /node_modules/,
-            name: 'vendor',
-            enforce: true,
-          },
-          // 公共代码单独打包
-          common: {
-            name: 'common',
-            minChunks: 2,
-            chunks: 'all',
-            enforce: true,
-          },
-        },
-      }
-    }
-
     // 添加别名
     config.resolve.alias = {
       ...config.resolve.alias,
@@ -101,9 +69,6 @@ const nextConfig = {
 
     return config
   },
-
-  // 输出配置
-  output: 'standalone',
 
   // 压缩配置
   compress: true,
