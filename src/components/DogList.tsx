@@ -3,15 +3,18 @@
 import { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useStore } from '@/store/useStore'
+import { useRouter } from 'next/navigation'
 import AddDogModal from './AddDogModal'
-import { Trash2, Edit, Plus, Search, Filter } from 'lucide-react'
+import EditDogModal from './EditDogModal'
+import { Trash2, Edit, Plus, Search, Filter, Eye } from 'lucide-react'
 import type { Dog } from '@/types'
 
 // 优化的狗狗卡片组件
-const DogCard = memo(({ dog, onEdit, onDelete }: {
+const DogCard = memo(({ dog, onEdit, onDelete, onView }: {
   dog: Dog
   onEdit: (dog: Dog) => void
   onDelete: (dog: Dog) => void
+  onView: (dog: Dog) => void
 }) => {
   const calculateAge = useCallback((birthDate: string) => {
     const birth = new Date(birthDate)
@@ -32,6 +35,7 @@ const DogCard = memo(({ dog, onEdit, onDelete }: {
 
   const handleEdit = useCallback(() => onEdit(dog), [dog, onEdit])
   const handleDelete = useCallback(() => onDelete(dog), [dog, onDelete])
+  const handleView = useCallback(() => onView(dog), [dog, onView])
 
   return (
     <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-6 border border-gray-100">
@@ -47,13 +51,19 @@ const DogCard = memo(({ dog, onEdit, onDelete }: {
               <span>
                 {dog.gender === 'male' ? '♂️ 公' : '♀️ 母'}
               </span>
-              <span>{dog.color}</span>
               <span>{calculateAge(dog.birth_date)}</span>
             </div>
           </div>
         </div>
         
         <div className="flex space-x-2">
+          <button
+            onClick={handleView}
+            className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+            title="查看详情"
+          >
+            <Eye className="h-4 w-4" />
+          </button>
           <button
             onClick={handleEdit}
             className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -72,18 +82,14 @@ const DogCard = memo(({ dog, onEdit, onDelete }: {
       </div>
       
       <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-        {dog.weight && (
-          <div className="flex justify-between">
-            <span className="text-gray-500">体重:</span>
-            <span className="font-medium">{dog.weight} kg</span>
-          </div>
-        )}
-        {dog.microchip_id && (
-          <div className="flex justify-between">
-            <span className="text-gray-500">芯片:</span>
-            <span className="font-medium font-mono text-xs">{dog.microchip_id}</span>
-          </div>
-        )}
+        <div className="flex justify-between">
+          <span className="text-gray-500">状态:</span>
+          <span className="font-medium">{dog.status || 'owned'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500">性别:</span>
+          <span className="font-medium">{dog.gender === 'male' ? '公' : '母'}</span>
+        </div>
       </div>
     </div>
   )
@@ -119,9 +125,11 @@ SkeletonCard.displayName = 'SkeletonCard'
 
 export default function DogList() {
   const { dogs, setDogs } = useStore()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingDog, setEditingDog] = useState<Dog | null>(null)
   
   // 搜索和筛选状态
@@ -160,8 +168,7 @@ export default function DogList() {
     return dogs.filter(dog => {
       const matchesSearch = searchTerm === '' || 
         dog.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        dog.breed.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        dog.microchip_id?.toLowerCase().includes(searchTerm.toLowerCase())
+        dog.breed.toLowerCase().includes(searchTerm.toLowerCase())
       
       const matchesGender = genderFilter === 'all' || dog.gender === genderFilter
       
@@ -178,9 +185,13 @@ export default function DogList() {
     return uniqueBreeds.sort()
   }, [dogs])
 
+  const handleView = useCallback((dog: Dog) => {
+    router.push(`/dog/${dog.id}`)
+  }, [router])
+
   const handleEdit = useCallback((dog: Dog) => {
-    // TODO: 实现编辑功能
-    alert(`编辑功能开发中... 选中的狗狗: ${dog.name}`)
+    setEditingDog(dog)
+    setIsEditModalOpen(true)
   }, [])
 
   const handleDelete = useCallback(async (dog: Dog) => {
@@ -206,6 +217,11 @@ export default function DogList() {
 
   const handleModalClose = useCallback(() => {
     setIsModalOpen(false)
+    fetchDogs() // 重新获取数据
+  }, [fetchDogs])
+
+  const handleEditModalClose = useCallback(() => {
+    setIsEditModalOpen(false)
     setEditingDog(null)
     fetchDogs() // 重新获取数据
   }, [fetchDogs])
@@ -261,7 +277,7 @@ export default function DogList() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <input
               type="text"
-              placeholder="搜索狗狗名字、品种、芯片号..."
+              placeholder="搜索狗狗名字、品种..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -313,6 +329,7 @@ export default function DogList() {
               dog={dog}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onView={handleView}
             />
           ))
         ) : (
@@ -344,6 +361,16 @@ export default function DogList() {
         isOpen={isModalOpen}
         onClose={handleModalClose}
       />
+
+      {/* 编辑狗狗模态框 */}
+      {editingDog && (
+        <EditDogModal
+          isOpen={isEditModalOpen}
+          onClose={handleEditModalClose}
+          dog={editingDog}
+          onUpdate={fetchDogs}
+        />
+      )}
     </div>
   )
 } 

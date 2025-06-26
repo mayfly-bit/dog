@@ -1,110 +1,36 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase, handleSupabaseError } from '@/lib/supabase'
-import { useStore } from '@/store/useStore'
 import { X, Upload } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { supabase } from '@/lib/supabase'
 import type { Dog } from '@/types'
+import { toast } from 'react-hot-toast'
 
-interface AddDogModalProps {
+interface EditDogModalProps {
   isOpen: boolean
   onClose: () => void
+  dog: Dog
+  onUpdate: () => void
 }
 
-export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
-  const { user, addDog } = useStore()
+export default function EditDogModal({ isOpen, onClose, dog, onUpdate }: EditDogModalProps) {
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
-    name: '',
-    breed: '',
-    gender: 'male' as 'male' | 'female',
-    birth_date: '',
-    status: 'owned' as Dog['status'],
-    sire_id: '',
-    dam_id: '',
-    photo_urls: [] as string[]
+    name: dog.name || '',
+    breed: dog.breed || '',
+    gender: dog.gender || 'male' as 'male' | 'female',
+    birth_date: dog.birth_date || '',
+    status: dog.status || 'owned' as Dog['status'],
+    sire_id: dog.sire_id || '',
+    dam_id: dog.dam_id || '',
+    photo_urls: dog.photo_urls || []
   })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!user) {
-      toast.error('请先登录')
-      return
-    }
-
-    // 基本验证
-    if (!formData.name.trim()) {
-      toast.error('请输入狗狗名称')
-      return
-    }
-
-    if (!formData.breed.trim()) {
-      toast.error('请输入品种')
-      return
-    }
-
-    if (!formData.birth_date) {
-      toast.error('请选择出生日期')
-      return
-    }
-
-    // 检查出生日期是否合理
-    const birthDate = new Date(formData.birth_date)
-    const today = new Date()
-    if (birthDate > today) {
-      toast.error('出生日期不能是未来日期')
-      return
-    }
-
-    setLoading(true)
-    const loadingToast = toast.loading('正在保存狗狗信息...')
-
-    try {
-      const newDog = {
-        ...formData,
-        user_id: user.id,
-        sire_id: formData.sire_id || null,
-        dam_id: formData.dam_id || null,
-        photo_urls: formData.photo_urls || []
-      }
-
-      const { data, error } = await supabase
-        .from('dogs')
-        .insert([newDog])
-        .select()
-        .single()
-
-      if (error) {
-        throw error
-      }
-
-      addDog(data)
-      toast.success('狗狗信息添加成功！', { id: loadingToast })
-      onClose()
-      
-      // 重置表单
-      setFormData({
-        name: '',
-        breed: '',
-        gender: 'male',
-        birth_date: '',
-        status: 'owned',
-        sire_id: '',
-        dam_id: '',
-        photo_urls: []
-      })
-    } catch (error: any) {
-      console.error('添加狗狗失败:', error)
-      const errorMessage = handleSupabaseError(error)
-      toast.error(errorMessage, { id: loadingToast })
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,7 +57,7 @@ export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
 
       try {
         // 生成文件名
-        const fileName = `${Date.now()}_${file.name}`
+        const fileName = `dogs/${dog.id}/${Date.now()}_${file.name}`
         
         console.log('正在上传文件:', fileName)
         
@@ -188,9 +114,59 @@ export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
     }))
   }
 
-  // 格式化日期输入的最大值（今天）
   const getTodayDate = () => {
     return new Date().toISOString().split('T')[0]
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!formData.name.trim()) {
+      toast.error('请输入狗狗名称')
+      return
+    }
+
+    if (!formData.breed.trim()) {
+      toast.error('请输入品种')
+      return
+    }
+
+    if (!formData.birth_date) {
+      toast.error('请选择出生日期')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const updateData = {
+        name: formData.name.trim(),
+        breed: formData.breed.trim(),
+        gender: formData.gender,
+        birth_date: formData.birth_date,
+        status: formData.status,
+        sire_id: formData.sire_id.trim() || null,
+        dam_id: formData.dam_id.trim() || null,
+        photo_urls: formData.photo_urls,
+        updated_at: new Date().toISOString()
+      }
+
+      const { error } = await supabase
+        .from('dogs')
+        .update(updateData)
+        .eq('id', dog.id)
+
+      if (error) throw error
+
+      toast.success('狗狗信息更新成功！')
+      onUpdate()
+      onClose()
+    } catch (error) {
+      console.error('更新失败:', error)
+      toast.error('更新失败，请重试')
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (!isOpen) return null
@@ -199,7 +175,7 @@ export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">添加狗狗信息</h2>
+          <h2 className="text-xl font-semibold text-gray-900">编辑狗狗信息</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -210,15 +186,16 @@ export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* 基本信息 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="label">姓名 *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                姓名 *
+              </label>
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => handleInputChange('name', e.target.value.trim())}
-                className="input"
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="输入狗狗名称"
                 required
                 disabled={loading}
@@ -227,12 +204,14 @@ export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
             </div>
 
             <div>
-              <label className="label">品种 *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                品种 *
+              </label>
               <input
                 type="text"
                 value={formData.breed}
-                onChange={(e) => handleInputChange('breed', e.target.value.trim())}
-                className="input"
+                onChange={(e) => handleInputChange('breed', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="输入品种"
                 required
                 disabled={loading}
@@ -241,11 +220,13 @@ export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
             </div>
 
             <div>
-              <label className="label">性别 *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                性别 *
+              </label>
               <select
                 value={formData.gender}
                 onChange={(e) => handleInputChange('gender', e.target.value)}
-                className="input"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
                 disabled={loading}
               >
@@ -255,24 +236,28 @@ export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
             </div>
 
             <div>
-              <label className="label">出生日期 *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                出生日期 *
+              </label>
               <input
                 type="date"
                 value={formData.birth_date}
                 onChange={(e) => handleInputChange('birth_date', e.target.value)}
-                className="input"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
                 disabled={loading}
-                max={getTodayDate()}
+                max={new Date().toISOString().split('T')[0]}
               />
             </div>
 
             <div>
-              <label className="label">状态</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                状态
+              </label>
               <select
                 value={formData.status}
                 onChange={(e) => handleInputChange('status', e.target.value)}
-                className="input"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={loading}
               >
                 <option value="owned">拥有中</option>
@@ -288,29 +273,31 @@ export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
             <h3 className="text-lg font-medium text-gray-900 mb-4">谱系信息</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="label">父亲ID</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  父亲ID
+                </label>
                 <input
                   type="text"
                   value={formData.sire_id}
-                  onChange={(e) => handleInputChange('sire_id', e.target.value.trim())}
-                  className="input"
+                  onChange={(e) => handleInputChange('sire_id', e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="输入父亲狗狗ID（可选）"
                   disabled={loading}
                 />
-                <p className="text-xs text-gray-500 mt-1">留空表示无父亲记录</p>
               </div>
 
               <div>
-                <label className="label">母亲ID</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  母亲ID
+                </label>
                 <input
                   type="text"
                   value={formData.dam_id}
-                  onChange={(e) => handleInputChange('dam_id', e.target.value.trim())}
-                  className="input"
+                  onChange={(e) => handleInputChange('dam_id', e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="输入母亲狗狗ID（可选）"
                   disabled={loading}
                 />
-                <p className="text-xs text-gray-500 mt-1">留空表示无母亲记录</p>
               </div>
             </div>
           </div>
@@ -342,7 +329,7 @@ export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
                   添加图片 - 方式2：文件上传（需要配置存储桶）
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
-                     onClick={() => document.getElementById('photo-upload')?.click()}>
+                     onClick={() => document.getElementById('photo-upload-edit')?.click()}>
                   <Upload className="mx-auto h-12 w-12 text-gray-400" />
                   <p className="mt-2 text-sm text-gray-600">
                     点击上传照片文件
@@ -352,7 +339,7 @@ export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
                   </p>
                 </div>
                 <input
-                  id="photo-upload"
+                  id="photo-upload-edit"
                   type="file"
                   accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
                   multiple
@@ -363,7 +350,6 @@ export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
               </div>
             </div>
 
-            {/* 已上传的照片预览 */}
             {formData.photo_urls.length > 0 && (
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">
@@ -392,22 +378,21 @@ export default function AddDogModal({ isOpen, onClose }: AddDogModalProps) {
             )}
           </div>
 
-          {/* 提交按钮 */}
-          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+          <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="btn-secondary"
+              className="px-6 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
               disabled={loading}
             >
               取消
             </button>
             <button
               type="submit"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
               disabled={loading}
-              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? '保存中...' : '保存'}
+              {loading ? '保存中...' : '保存修改'}
             </button>
           </div>
         </form>

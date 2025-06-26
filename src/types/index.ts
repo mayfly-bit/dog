@@ -5,18 +5,13 @@ export type Dog = {
   breed: string;
   gender: 'male' | 'female';
   birth_date: string; // YYYY-MM-DD
-  color: string; // 颜色
-  weight?: number; // 体重
-  microchip_id?: string; // 芯片号
-  registration_number?: string; // 注册号
-  owner_contact?: string; // 主人联系方式
   status?: 'owned' | 'sold' | 'deceased' | 'returned';
   photo_urls?: string[];
   sire_id?: string; // 父亲狗 ID
   dam_id?: string; // 母亲狗 ID
-  notes?: string; // 备注
   created_at: string;
   updated_at?: string;
+  user_id: string;
 };
 
 // 进货记录类型

@@ -10,10 +10,7 @@ interface Dog {
   breed: string
   birth_date: string
   gender: string
-  color: string
   weight?: number
-  microchip_id?: string
-  registration_number?: string
   owner_contact?: string
   created_at: string
 }
@@ -24,9 +21,6 @@ interface QRCodeData {
   breed: string
   birth_date: string
   gender: string
-  color: string
-  microchip_id?: string
-  registration_number?: string
   contact: string
   view_url: string
 }
@@ -61,8 +55,23 @@ export default function QRCodeGenerator() {
   }
 
   const generateQRCodeData = (dog: Dog): QRCodeData => {
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+    // 更强壮的baseUrl获取逻辑
+    let baseUrl = ''
+    if (typeof window !== 'undefined') {
+      baseUrl = window.location.origin
+    } else {
+      // 服务器端渲染时的默认值
+      baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://your-domain.vercel.app'
+    }
+    
     const viewUrl = `${baseUrl}/dog/${dog.id}`
+    
+    console.log('生成二维码数据:', {
+      dogId: dog.id,
+      dogName: dog.name,
+      baseUrl,
+      viewUrl
+    })
     
     return {
       id: dog.id,
@@ -70,9 +79,6 @@ export default function QRCodeGenerator() {
       breed: dog.breed,
       birth_date: dog.birth_date,
       gender: dog.gender,
-      color: dog.color,
-      microchip_id: dog.microchip_id,
-      registration_number: dog.registration_number,
       contact: dog.owner_contact || '联系系统管理员',
       view_url: viewUrl
     }
@@ -86,6 +92,13 @@ export default function QRCodeGenerator() {
       
       // 直接使用URL链接作为二维码内容，兼容微信支付宝扫码
       const qrContent = qrData.view_url
+      
+      console.log('二维码内容:', qrContent)
+      
+      // 验证URL格式
+      if (!qrContent || qrContent === '/dog/' || !qrContent.includes(dog.id)) {
+        throw new Error('二维码内容生成失败，URL格式不正确')
+      }
 
       // 生成二维码
       const qrCodeDataUrl = await QRCode.toDataURL(qrContent, {
@@ -94,14 +107,20 @@ export default function QRCodeGenerator() {
         color: {
           dark: '#000000',
           light: '#FFFFFF'
-        }
+        },
+        errorCorrectionLevel: 'M'
       })
       
       setQrCodeUrl(qrCodeDataUrl)
       setSelectedDog(dog)
+      
+      console.log('二维码生成成功:', {
+        dogName: dog.name,
+        qrCodeLength: qrCodeDataUrl.length
+      })
     } catch (error) {
       console.error('生成二维码失败:', error)
-      alert('生成二维码失败，请重试')
+      alert(`生成二维码失败: ${error instanceof Error ? error.message : '未知错误'}`)
     } finally {
       setGenerating(false)
     }
@@ -176,9 +195,6 @@ export default function QRCodeGenerator() {
               <h2>${selectedDog.name}</h2>
               <p><strong>品种：</strong>${selectedDog.breed}</p>
               <p><strong>性别：</strong>${selectedDog.gender === 'male' ? '公' : '母'}</p>
-              <p><strong>颜色：</strong>${selectedDog.color}</p>
-              ${selectedDog.microchip_id ? `<p><strong>芯片号：</strong>${selectedDog.microchip_id}</p>` : ''}
-              ${selectedDog.registration_number ? `<p><strong>注册号：</strong>${selectedDog.registration_number}</p>` : ''}
             </div>
             <div class="qr-code">
               <img src="${qrCodeUrl}" alt="二维码" style="width: 200px; height: 200px;" />
@@ -336,10 +352,6 @@ export default function QRCodeGenerator() {
                   </span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-600">颜色：</span>
-                  <span className="font-medium">{qrCodeData.color}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
                   <span className="text-gray-600">出生日期：</span>
                   <span className="font-medium">
                     {new Date(qrCodeData.birth_date).toLocaleDateString('zh-CN')}
@@ -351,18 +363,6 @@ export default function QRCodeGenerator() {
                     {calculateAge(qrCodeData.birth_date)}
                   </span>
                 </div>
-                {qrCodeData.microchip_id && (
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">芯片号：</span>
-                    <span className="font-medium">{qrCodeData.microchip_id}</span>
-                  </div>
-                )}
-                {qrCodeData.registration_number && (
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">注册号：</span>
-                    <span className="font-medium">{qrCodeData.registration_number}</span>
-                  </div>
-                )}
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-gray-600">联系方式：</span>
                   <span className="font-medium">{qrCodeData.contact}</span>

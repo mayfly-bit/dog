@@ -7,6 +7,9 @@ import type { Dog } from '@/types'
 
 interface DogCardProps {
   dog: Dog
+  onEdit?: (dog: Dog) => void
+  onDelete?: (dog: Dog) => void
+  onView?: (dog: Dog) => void
 }
 
 const statusLabels = {
@@ -23,7 +26,7 @@ const statusColors = {
   returned: 'bg-yellow-100 text-yellow-800'
 }
 
-export default function DogCard({ dog }: DogCardProps) {
+export default function DogCard({ dog, onEdit, onDelete, onView }: DogCardProps) {
   const getAge = (birthDate: string) => {
     const birth = new Date(birthDate)
     const now = new Date()
@@ -90,18 +93,21 @@ export default function DogCard({ dog }: DogCardProps) {
           
           <div className="flex space-x-2">
             <button
-              className="p-1 text-gray-400 hover:text-primary-600 transition-colors"
+              onClick={() => onView?.(dog)}
+              className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
               title="查看详情"
             >
               <Eye className="h-4 w-4" />
             </button>
             <button
-              className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+              onClick={() => onEdit?.(dog)}
+              className="p-1 text-gray-400 hover:text-green-600 transition-colors"
               title="编辑"
             >
               <Edit className="h-4 w-4" />
             </button>
             <button
+              onClick={() => onDelete?.(dog)}
               className="p-1 text-gray-400 hover:text-red-600 transition-colors"
               title="删除"
             >

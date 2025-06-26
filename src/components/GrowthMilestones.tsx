@@ -278,6 +278,10 @@ function AddMilestoneModal({
   })
   const [dogs, setDogs] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [previewUrls, setPreviewUrls] = useState<string[]>([])
+  const [dragActive, setDragActive] = useState(false)
 
   useEffect(() => {
     if (!milestone) {
@@ -299,6 +303,100 @@ function AddMilestoneModal({
     }
   }
 
+  // 文件处理函数
+  const handleFileSelect = (files: FileList | null) => {
+    if (!files) return
+
+    const validFiles: File[] = []
+    const newPreviewUrls: string[] = []
+
+    Array.from(files).forEach(file => {
+      // 检查文件类型
+      if (!file.type.startsWith('image/')) {
+        alert(`文件 ${file.name} 不是有效的图片格式`)
+        return
+      }
+
+      // 检查文件大小（5MB限制）
+      if (file.size > 5 * 1024 * 1024) {
+        alert(`文件 ${file.name} 大小超过5MB限制`)
+        return
+      }
+
+      validFiles.push(file)
+      newPreviewUrls.push(URL.createObjectURL(file))
+    })
+
+    setSelectedFiles(prev => [...prev, ...validFiles])
+    setPreviewUrls(prev => [...prev, ...newPreviewUrls])
+  }
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index))
+    setPreviewUrls(prev => {
+      const newUrls = prev.filter((_, i) => i !== index)
+      // 清理旧的预览URL
+      URL.revokeObjectURL(prev[index])
+      return newUrls
+    })
+  }
+
+  const uploadFiles = async () => {
+    if (selectedFiles.length === 0) return []
+    
+    setUploading(true)
+    const urls: string[] = []
+
+    try {
+      for (const file of selectedFiles) {
+        const fileExt = file.name.split('.').pop()
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+        const filePath = `growth-milestones/${fileName}`
+
+        const { data, error } = await supabase.storage
+          .from('dog-photos')
+          .upload(filePath, file)
+
+        if (error) {
+          console.error('上传文件失败:', error)
+          alert(`上传文件 ${file.name} 失败: ${error.message}`)
+          continue
+        }
+
+        // 获取公共URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('dog-photos')
+          .getPublicUrl(filePath)
+
+        urls.push(publicUrl)
+      }
+    } catch (error) {
+      console.error('批量上传失败:', error)
+      alert('上传失败，请重试')
+    } finally {
+      setUploading(false)
+    }
+
+    return urls
+  }
+
+  // 拖拽处理函数
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragActive(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragActive(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragActive(false)
+    handleFileSelect(e.dataTransfer.files)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -311,10 +409,22 @@ function AddMilestoneModal({
         return
       }
 
-      // 处理照片URL
-      const photoUrls = formData.photo_urls
-        ? formData.photo_urls.split(',').map(url => url.trim()).filter(url => url)
-        : []
+      let photoUrls: string[] = []
+
+      // 如果有新上传的文件，先上传文件
+      if (selectedFiles.length > 0) {
+        const uploadedUrls = await uploadFiles()
+        photoUrls = [...photoUrls, ...uploadedUrls]
+      }
+
+      // 处理原有的照片URL
+      if (formData.photo_urls) {
+        const existingUrls = formData.photo_urls
+          .split(',')
+          .map(url => url.trim())
+          .filter(url => url)
+        photoUrls = [...photoUrls, ...existingUrls]
+      }
 
       const submitData = {
         user_id: user.id,
@@ -343,6 +453,9 @@ function AddMilestoneModal({
         if (error) throw error
       }
 
+      // 清理预览URL
+      previewUrls.forEach(url => URL.revokeObjectURL(url))
+      
       onSuccess()
     } catch (error) {
       console.error('保存里程碑失败:', error)
@@ -440,9 +553,70 @@ function AddMilestoneModal({
             />
           </div>
 
+          {/* 图片上传区域 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              上传照片（可选）
+            </label>
+            
+            {/* 拖拽上传区域 */}
+            <div
+              className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                dragActive
+                  ? 'border-purple-500 bg-purple-50'
+                  : 'border-gray-300 hover:border-purple-400'
+              }`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => handleFileSelect(e.target.files)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              
+              <div className="space-y-2">
+                <div className="text-4xl">📸</div>
+                <div className="text-sm text-gray-600">
+                  <span className="font-medium text-purple-600">点击选择图片</span>
+                  <span className="text-gray-500"> 或拖拽图片到此处</span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  支持 JPG、PNG、WebP、GIF 格式，最大 5MB，可选择多张
+                </div>
+              </div>
+            </div>
+
+            {/* 图片预览 */}
+            {previewUrls.length > 0 && (
+              <div className="mt-4 grid grid-cols-3 gap-4">
+                {previewUrls.map((url, index) => (
+                  <div key={index} className="relative group">
+                    <img
+                      src={url}
+                      alt={`预览 ${index + 1}`}
+                      className="w-full h-20 object-cover rounded-lg border"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeFile(index)}
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 备用URL输入（可选） */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              照片链接（可选）
+              或输入图片链接（可选）
             </label>
             <input
               type="text"
@@ -452,7 +626,7 @@ function AddMilestoneModal({
               placeholder="多个链接用逗号分隔"
             />
             <p className="text-xs text-gray-500 mt-1">
-              输入图片URL链接，多个链接用逗号分隔
+              如果不上传文件，可以直接输入图片URL链接，多个链接用逗号分隔
             </p>
           </div>
 
@@ -466,10 +640,10 @@ function AddMilestoneModal({
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || uploading}
               className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? '保存中...' : (milestone ? '更新' : '添加')}
+              {uploading ? '上传中...' : loading ? '保存中...' : (milestone ? '更新' : '添加')}
             </button>
           </div>
         </form>
