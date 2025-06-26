@@ -5,7 +5,7 @@ export type Dog = {
   breed: string;
   gender: 'male' | 'female';
   birth_date: string; // YYYY-MM-DD
-  status?: 'owned' | 'sold' | 'deceased' | 'returned';
+  status?: 'owned' | 'for_sale' | 'sold' | 'deceased' | 'returned';
   photo_urls?: string[];
   sire_id?: string; // 父亲狗 ID
   dam_id?: string; // 母亲狗 ID

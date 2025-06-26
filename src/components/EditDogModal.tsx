@@ -261,6 +261,7 @@ export default function EditDogModal({ isOpen, onClose, dog, onUpdate }: EditDog
                 disabled={loading}
               >
                 <option value="owned">拥有中</option>
+                <option value="for_sale">在售</option>
                 <option value="sold">已售出</option>
                 <option value="deceased">已过世</option>
                 <option value="returned">已退回</option>

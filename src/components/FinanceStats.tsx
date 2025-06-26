@@ -51,7 +51,7 @@ export default function FinanceStats() {
       const { data: dogs } = await supabase
         .from('dogs')
         .select('purchase_price, sale_price, status')
-        .eq('status', 'available')
+        .eq('status', 'for_sale')
       
       const dogsInStock = dogs?.length || 0
       const avgDogPrice = dogs?.length 

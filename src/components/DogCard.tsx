@@ -14,6 +14,7 @@ interface DogCardProps {
 
 const statusLabels = {
   owned: '拥有中',
+  for_sale: '在售',
   sold: '已售出', 
   deceased: '已过世',
   returned: '已退回'
@@ -21,6 +22,7 @@ const statusLabels = {
 
 const statusColors = {
   owned: 'bg-green-100 text-green-800',
+  for_sale: 'bg-orange-100 text-orange-800',
   sold: 'bg-blue-100 text-blue-800',
   deceased: 'bg-gray-100 text-gray-800',
   returned: 'bg-yellow-100 text-yellow-800'
