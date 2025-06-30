@@ -11,6 +11,7 @@ import {
   FileText,
   TrendingUp,
   QrCode,
+  Bot,
   Settings,
   LogOut,
   Menu,
@@ -24,6 +25,7 @@ const navigation = [
   { name: '健康记录', href: '/health', icon: Heart },
   { name: '繁殖记录', href: '/breeding', icon: FileText },
   { name: '成长档案', href: '/growth', icon: TrendingUp },
+  { name: 'AI分析', href: '/analysis', icon: Bot },
   { name: '二维码', href: '/qrcode', icon: QrCode },
 ]
 
