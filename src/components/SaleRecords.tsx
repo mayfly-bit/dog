@@ -235,13 +235,14 @@ function AddSaleModal({
     try {
       const { data, error } = await supabase
         .from('dogs')
-        .select('id, name, breed, gender')
+        .select('id, name, breed, gender, status')
+        .in('status', ['owned', 'for_sale'])  // 只显示"拥有中"和"在售"的狗狗
         .order('name')
 
       if (error) throw error
       setDogs(data || [])
     } catch (error) {
-      console.error('获取狗狗列表失败:', error)
+      console.error('获取可售狗狗列表失败:', error)
     }
   }
 
@@ -270,6 +271,19 @@ function AddSaleModal({
           .eq('id', sale.id)
 
         if (error) throw error
+        
+        // 如果更新了狗狗ID，同样更新狗狗状态为"已售出"
+        if (formData.dog_id) {
+          const { error: dogUpdateError } = await supabase
+            .from('dogs')
+            .update({ status: 'sold' })
+            .eq('id', formData.dog_id)
+          
+          if (dogUpdateError) {
+            console.error('更新狗狗状态失败:', dogUpdateError)
+            // 不抛出错误，避免影响主流程
+          }
+        }
       } else {
         // 创建新记录
         const { error } = await supabase
@@ -277,6 +291,19 @@ function AddSaleModal({
           .insert([submitData])
 
         if (error) throw error
+        
+        // 自动将狗狗状态更新为"已售出"
+        if (formData.dog_id) {
+          const { error: dogUpdateError } = await supabase
+            .from('dogs')
+            .update({ status: 'sold' })
+            .eq('id', formData.dog_id)
+          
+          if (dogUpdateError) {
+            console.error('更新狗狗状态失败:', dogUpdateError)
+            // 不抛出错误，避免影响主流程
+          }
+        }
       }
 
       onSuccess()

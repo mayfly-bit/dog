@@ -337,13 +337,14 @@ function AddMatingModal({
     try {
       const { data, error } = await supabase
         .from('dogs')
-        .select('id, name, breed, gender')
+        .select('id, name, breed, gender, status')
+        .in('status', ['owned', 'for_sale'])  // 只显示"拥有中"和"在售"的狗狗，排除已售出的
         .order('name')
 
       if (error) throw error
       setDogs(data || [])
     } catch (error) {
-      console.error('获取狗狗列表失败:', error)
+      console.error('获取可用狗狗列表失败:', error)
     }
   }
 
