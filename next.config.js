@@ -1,5 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // 环境变量配置（避免 .env.local 文件丢失问题）
+  env: {
+    NEXT_PUBLIC_SUPABASE_URL: 'https://sevtqdbdzuolezjeauaz.supabase.co',
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNldnRxZGJkenVvbGV6amVhdWF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3NDc4ODQsImV4cCI6MjA2NjMyMzg4NH0.CS99HdyPn2pxNyr9RQ2YMu2Lxp74Draj_lQK_Js41qM',
+    DEEPSEEK_API_KEY: 'sk-50ab6ab4ebe745f9aa255b2eb135dd9c',
+  },
+
   // 实验性功能配置（简化配置避免构建错误）
   experimental: {
     // 暂时禁用可能导致构建错误的功能

@@ -1,464 +1,677 @@
 import { supabase } from './supabase'
 
-export interface BusinessAnalyticsData {
-  // 基础统计
-  overview: {
-    totalDogs: number
-    activeDogs: number
-    soldDogs: number
-    forSaleDogs: number
-    averageAge: number
-    breedDistribution: Record<string, number>
-  }
-  
-  // 财务数据
-  financial: {
-    totalRevenue: number
-    totalExpenses: number
-    netProfit: number
-    profitMargin: number
-    averageSalePrice: number
-    averagePurchasePrice: number
-    monthlyTrends: Array<{
-      month: string
-      revenue: number
-      expenses: number
-      profit: number
-    }>
-    expenseCategories: Record<string, number>
-  }
-  
-  // 健康管理
-  health: {
-    totalHealthRecords: number
-    vaccinationCoverage: number
-    treatmentCosts: number
-    commonHealthIssues: Record<string, number>
-    averageHealthCostPerDog: number
-    recentHealthTrends: Array<{
-      month: string
-      treatments: number
-      vaccinations: number
-      checkups: number
-    }>
-  }
-  
-  // 繁殖管理
-  breeding: {
-    totalLitters: number
-    activePregnancies: number
-    completedBirths: number
-    averageLitterSize: number
-    breedingSuccessRate: number
-    monthlyBirths: Array<{
-      month: string
-      births: number
-      pregnancies: number
-    }>
-  }
-  
-  // 业务指标
-  performance: {
-    salesConversionRate: number
-    averageTimeToSale: number
-    customerRetention: number
-    seasonalTrends: Record<string, number>
-    popularBreeds: Array<{
-      breed: string
-      count: number
-      averagePrice: number
-    }>
-  }
-  
-  // 数据收集时间
-  collectedAt: Date
+interface DogDetail {
+  id: string
+  name: string
+  breed: string
+  gender: 'male' | 'female'
+  birth_date: string
+  purchase_date?: string
+  purchase_price?: number
+  sale_date?: string
+  sale_price?: number
+  status: 'owned' | 'sold' | 'for_sale'
+  age_months: number
+  weight?: number
+  health_score?: number
+  last_health_check?: string
+  vaccination_records: Array<{
+    vaccine_type: string
+    date: string
+    next_due?: string
+    veterinarian?: string
+    cost?: number
+  }>
+  breeding_records: Array<{
+    type: 'mating' | 'pregnancy' | 'birth'
+    date: string
+    partner_id?: string
+    partner_name?: string
+    status?: string
+    expected_date?: string
+    actual_date?: string
+    puppies_count?: number
+    notes?: string
+  }>
+  financial_records: Array<{
+    type: 'purchase' | 'sale' | 'expense'
+    date: string
+    amount: number
+    description?: string
+    category?: string
+  }>
 }
 
-export class DataCollector {
-  
-  async collectAllData(): Promise<BusinessAnalyticsData> {
+interface BreedingAnalysis {
+  female_dogs: Array<{
+    id: string
+    name: string
+    breed: string
+    age_months: number
+    last_heat_cycle?: string
+    estimated_next_heat?: string
+    breeding_status: 'available' | 'pregnant' | 'nursing' | 'too_young' | 'too_old'
+    pregnancy_details?: {
+      mating_date: string
+      expected_birth: string
+      current_stage: string
+      days_pregnant: number
+      partner_info: {
+        id: string
+        name: string
+        breed: string
+      }
+    }
+    breeding_history: Array<{
+      date: string
+      partner: string
+      outcome: string
+      puppies_count?: number
+    }>
+  }>
+  male_dogs: Array<{
+    id: string
+    name: string
+    breed: string
+    age_months: number
+    breeding_status: 'available' | 'too_young' | 'retired'
+    breeding_history: Array<{
+      date: string
+      female_partner: string
+      outcome: string
+      puppies_count?: number
+    }>
+  }>
+}
+
+interface FinancialAnalysis {
+  dogs_financial: Array<{
+    id: string
+    name: string
+    breed: string
+    purchase_price: number
+    sale_price?: number
+    current_market_value?: number
+    total_expenses: number
+    profit_loss: number
+    roi_percentage: number
+    expense_breakdown: {
+      food: number
+      healthcare: number
+      breeding: number
+      grooming: number
+      other: number
+    }
+    monthly_costs: Array<{
+      month: string
+      amount: number
+      category: string
+    }>
+  }>
+  breeding_profitability: Array<{
+    litter_id: string
+    mother_name: string
+    father_name: string
+    birth_date: string
+    puppies_count: number
+    puppies_sold: number
+    total_revenue: number
+    total_costs: number
+    net_profit: number
+    cost_per_puppy: number
+    average_sale_price: number
+  }>
+}
+
+interface HealthAnalysis {
+  dogs_health: Array<{
+    id: string
+    name: string
+    breed: string
+    age_months: number
+    health_status: 'excellent' | 'good' | 'fair' | 'poor' | 'critical'
+    vaccination_status: {
+      core_vaccines: {
+        rabies: { last_date: string; next_due: string; status: 'current' | 'due' | 'overdue' }
+        dhpp: { last_date: string; next_due: string; status: 'current' | 'due' | 'overdue' }
+        bordetella: { last_date: string; next_due: string; status: 'current' | 'due' | 'overdue' }
+      }
+      optional_vaccines: Array<{
+        type: string
+        last_date: string
+        next_due: string
+        status: 'current' | 'due' | 'overdue'
+      }>
+    }
+    health_records: Array<{
+      date: string
+      type: 'vaccination' | 'checkup' | 'treatment' | 'surgery'
+      description: string
+      veterinarian?: string
+      cost?: number
+      follow_up_date?: string
+    }>
+    upcoming_care: Array<{
+      type: 'vaccination' | 'checkup' | 'treatment'
+      due_date: string
+      description: string
+      estimated_cost?: number
+      priority: 'urgent' | 'important' | 'routine'
+    }>
+  }>
+}
+
+// 添加重试机制的数据获取函数
+async function fetchDataWithRetry(tableName: string, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const [
-        overview,
-        financial,
-        health,
-        breeding,
-        performance
-      ] = await Promise.all([
-        this.collectOverviewData(),
-        this.collectFinancialData(),
-        this.collectHealthData(),
-        this.collectBreedingData(),
-        this.collectPerformanceData()
-      ])
+      console.log(`📡 获取 ${tableName} 数据 (尝试 ${attempt}/${maxRetries})`)
+      const { data, error } = await supabase.from(tableName).select('*')
+      if (error) throw error
+      console.log(`✅ ${tableName} 数据获取成功: ${data?.length || 0} 条`)
+      return data || []
+    } catch (error) {
+      console.log(`❌ ${tableName} 数据获取失败 (尝试 ${attempt}/${maxRetries}):`, error)
+      if (attempt === maxRetries) throw error
+      // 等待后重试
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+    }
+  }
+  return []
+}
+
+export async function collectComprehensiveBusinessData() {
+  try {
+    console.log('🔍 开始全面业务数据收集...')
+    
+    // 串行收集基础数据，避免并发问题
+    console.log('📊 收集狗狗数据...')
+    const dogs = await fetchDataWithRetry('dogs')
+    
+    console.log('💰 收集销售数据...')
+    const sales = await fetchDataWithRetry('sales')
+    
+    console.log('🛒 收集采购数据...')
+    const purchases = await fetchDataWithRetry('purchases')
+    
+    console.log('💸 收集支出数据...')
+    const expenses = await fetchDataWithRetry('expenses')
+    
+    console.log('🏥 收集健康记录...')
+    const healthRecords = await fetchDataWithRetry('health_records')
+    
+    console.log('🐕‍🦺 收集产仔记录...')
+    const litters = await fetchDataWithRetry('litters')
+
+    console.log(`📊 基础数据统计: 狗狗${dogs.length}只, 销售${sales.length}条, 采购${purchases.length}条, 支出${expenses.length}条, 健康记录${healthRecords.length}条, 产仔记录${litters.length}条`)
+    
+    // 验证关键数据
+    if (dogs.length === 0) {
+      console.log('⚠️  警告: 没有找到狗狗数据，检查数据库连接')
+      // 尝试简单查询验证连接
+      const testQuery = await supabase.from('dogs').select('count', { count: 'exact' })
+      console.log('🔍 数据库连接测试:', testQuery)
+    }
+
+    // 1. 构建详细的狗狗数据
+    const dogsDetail: DogDetail[] = dogs.map(dog => {
+      const dogSales = sales.filter(s => s.dog_id === dog.id)
+      const dogPurchases = purchases.filter(p => p.dog_id === dog.id)
+      const dogExpenses = expenses.filter(e => e.dog_id === dog.id)
+      const dogHealth = healthRecords.filter(h => h.dog_id === dog.id)
+      const dogBreeding = litters.filter(l => l.mother_id === dog.id || l.father_id === dog.id)
+
+      const birthDate = new Date(dog.birth_date)
+      const ageMonths = Math.floor((Date.now() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44))
+
+      // 疫苗记录处理
+      const vaccinationRecords = dogHealth
+        .filter(h => h.record_type === 'vaccination')
+        .map(v => ({
+          vaccine_type: v.treatment_type || v.description || '未知疫苗',
+          date: v.record_date,
+          next_due: calculateNextVaccination(v.treatment_type, v.record_date),
+          veterinarian: v.veterinarian,
+          cost: v.cost || 0
+        }))
+
+      // 繁育记录处理
+      const breedingRecords = dogBreeding.map(breeding => ({
+        type: breeding.birth_date ? 'birth' : 'mating' as 'mating' | 'pregnancy' | 'birth',
+        date: breeding.mating_date || breeding.birth_date,
+        partner_id: dog.id === breeding.mother_id ? breeding.father_id : breeding.mother_id,
+        partner_name: dog.id === breeding.mother_id ? 
+          dogs.find(d => d.id === breeding.father_id)?.name : 
+          dogs.find(d => d.id === breeding.mother_id)?.name,
+        status: breeding.status,
+        expected_date: breeding.expected_birth_date,
+        actual_date: breeding.birth_date,
+        puppies_count: breeding.puppies_count,
+        notes: breeding.notes
+      }))
+
+      // 财务记录处理
+      const financialRecords = [
+        ...dogPurchases.map(p => ({
+          type: 'purchase' as const,
+          date: p.purchase_date,
+          amount: p.amount || 0,
+          description: p.notes,
+          category: 'purchase'
+        })),
+        ...dogSales.map(s => ({
+          type: 'sale' as const,
+          date: s.sale_date,
+          amount: s.amount || 0,
+          description: s.notes,
+          category: 'sale'
+        })),
+        ...dogExpenses.map(e => ({
+          type: 'expense' as const,
+          date: e.expense_date,
+          amount: e.amount || 0,
+          description: e.description,
+          category: e.category
+        }))
+      ]
 
       return {
-        overview,
-        financial,
-        health,
-        breeding,
-        performance,
-        collectedAt: new Date()
-      }
-    } catch (error) {
-      console.error('数据收集失败:', error)
-      throw new Error('无法收集业务数据进行分析')
-    }
-  }
-
-  private async collectOverviewData() {
-    const { data: dogs } = await supabase
-      .from('dogs')
-      .select('id, breed, birth_date, status, gender')
-
-    if (!dogs) return this.getEmptyOverview()
-
-    const now = new Date()
-    const totalDogs = dogs.length
-    const activeDogs = dogs.filter(d => ['owned', 'for_sale'].includes(d.status || '')).length
-    const soldDogs = dogs.filter(d => d.status === 'sold').length
-    const forSaleDogs = dogs.filter(d => d.status === 'for_sale').length
-    
-    const averageAge = dogs.reduce((sum, dog) => {
-      const age = (now.getTime() - new Date(dog.birth_date).getTime()) / (1000 * 60 * 60 * 24 * 365)
-      return sum + age
-    }, 0) / dogs.length || 0
-
-    const breedDistribution = dogs.reduce((acc, dog) => {
-      acc[dog.breed] = (acc[dog.breed] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-
-    return {
-      totalDogs,
-      activeDogs,
-      soldDogs,
-      forSaleDogs,
-      averageAge: Number(averageAge.toFixed(1)),
-      breedDistribution
-    }
-  }
-
-  private async collectFinancialData() {
-    const [salesResult, purchasesResult, expensesResult] = await Promise.all([
-      supabase.from('sales').select('amount, sale_date'),
-      supabase.from('purchases').select('amount, purchase_date'),
-      supabase.from('expenses').select('amount, expense_date, category')
-    ])
-
-    const sales = salesResult.data || []
-    const purchases = purchasesResult.data || []
-    const expenses = expensesResult.data || []
-
-    const totalRevenue = sales.reduce((sum, sale) => sum + sale.amount, 0)
-    const totalPurchaseCosts = purchases.reduce((sum, purchase) => sum + purchase.amount, 0)
-    const totalOperatingExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0)
-    const totalExpenses = totalPurchaseCosts + totalOperatingExpenses
-    const netProfit = totalRevenue - totalExpenses
-    const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
-
-    const averageSalePrice = sales.length > 0 ? totalRevenue / sales.length : 0
-    const averagePurchasePrice = purchases.length > 0 ? totalPurchaseCosts / purchases.length : 0
-
-    // 月度趋势
-    const monthlyTrends = this.calculateMonthlyTrends(sales, purchases, expenses)
-    
-    // 支出分类
-    const expenseCategories = expenses.reduce((acc, expense) => {
-      acc[expense.category] = (acc[expense.category] || 0) + expense.amount
-      return acc
-    }, {} as Record<string, number>)
-
-    return {
-      totalRevenue,
-      totalExpenses,
-      netProfit,
-      profitMargin: Number(profitMargin.toFixed(2)),
-      averageSalePrice: Number(averageSalePrice.toFixed(2)),
-      averagePurchasePrice: Number(averagePurchasePrice.toFixed(2)),
-      monthlyTrends,
-      expenseCategories
-    }
-  }
-
-  private async collectHealthData() {
-    const { data: healthRecords } = await supabase
-      .from('health_records')
-      .select('id, type, date, description, cost')
-
-    if (!healthRecords) return this.getEmptyHealthData()
-
-    const totalHealthRecords = healthRecords.length
-    const vaccinations = healthRecords.filter(r => r.type === 'vaccination').length
-    const { data: totalDogs } = await supabase.from('dogs').select('id')
-    const vaccinationCoverage = totalDogs ? (vaccinations / totalDogs.length) * 100 : 0
-    
-    const treatmentCosts = healthRecords
-      .filter(r => r.type === 'treatment')
-      .reduce((sum, r) => sum + (r.cost || 0), 0)
-
-    const averageHealthCostPerDog = totalDogs ? treatmentCosts / totalDogs.length : 0
-
-    // 常见健康问题
-    const commonHealthIssues = healthRecords.reduce((acc, record) => {
-      if (record.type === 'treatment' && record.description) {
-        const issue = this.categorizeHealthIssue(record.description)
-        acc[issue] = (acc[issue] || 0) + 1
-      }
-      return acc
-    }, {} as Record<string, number>)
-
-    const recentHealthTrends = this.calculateHealthTrends(healthRecords)
-
-    return {
-      totalHealthRecords,
-      vaccinationCoverage: Number(vaccinationCoverage.toFixed(1)),
-      treatmentCosts,
-      commonHealthIssues,
-      averageHealthCostPerDog: Number(averageHealthCostPerDog.toFixed(2)),
-      recentHealthTrends
-    }
-  }
-
-  private async collectBreedingData() {
-    const { data: litters } = await supabase
-      .from('litters')
-      .select('id, mating_date, expected_birth_date, birth_date, puppy_count')
-
-    if (!litters) return this.getEmptyBreedingData()
-
-    const totalLitters = litters.length
-    const activePregnancies = litters.filter(l => !l.birth_date && new Date(l.expected_birth_date) > new Date()).length
-    const completedBirths = litters.filter(l => l.birth_date).length
-    
-    const averageLitterSize = litters
-      .filter(l => l.puppy_count && l.puppy_count > 0)
-      .reduce((sum, l) => sum + (l.puppy_count || 0), 0) / completedBirths || 0
-
-    const breedingSuccessRate = totalLitters > 0 ? (completedBirths / totalLitters) * 100 : 0
-
-    const monthlyBirths = this.calculateBreedingTrends(litters)
-
-    return {
-      totalLitters,
-      activePregnancies,
-      completedBirths,
-      averageLitterSize: Number(averageLitterSize.toFixed(1)),
-      breedingSuccessRate: Number(breedingSuccessRate.toFixed(1)),
-      monthlyBirths
-    }
-  }
-
-  private async collectPerformanceData() {
-    const [salesResult, dogsResult] = await Promise.all([
-      supabase.from('sales').select('sale_date, dog_id'),
-      supabase.from('dogs').select('id, breed, status, created_at')
-    ])
-
-    const sales = salesResult.data || []
-    const dogs = dogsResult.data || []
-
-    const totalForSale = dogs.filter(d => d.status === 'for_sale').length
-    const totalSold = sales.length
-    const salesConversionRate = totalForSale + totalSold > 0 ? (totalSold / (totalForSale + totalSold)) * 100 : 0
-
-    // 计算平均销售时间
-    const averageTimeToSale = this.calculateAverageTimeToSale(sales, dogs)
-
-    // 品种受欢迎程度
-    const popularBreeds = this.calculateBreedPopularity(dogs, sales)
-
-    // 季节性趋势 (简化版)
-    const seasonalTrends = this.calculateSeasonalTrends(sales)
-
-    return {
-      salesConversionRate: Number(salesConversionRate.toFixed(2)),
-      averageTimeToSale,
-      customerRetention: 0, // 暂时设为0，需要客户数据
-      seasonalTrends,
-      popularBreeds
-    }
-  }
-
-  private calculateMonthlyTrends(sales: any[], purchases: any[], expenses: any[]) {
-    const trends: Record<string, { revenue: number; expenses: number; profit: number }> = {}
-    
-    // 处理销售数据
-    sales.forEach(sale => {
-      const month = new Date(sale.sale_date).toISOString().slice(0, 7)
-      if (!trends[month]) trends[month] = { revenue: 0, expenses: 0, profit: 0 }
-      trends[month].revenue += sale.amount
-    })
-
-    // 处理采购数据
-    purchases.forEach(purchase => {
-      const month = new Date(purchase.purchase_date).toISOString().slice(0, 7)
-      if (!trends[month]) trends[month] = { revenue: 0, expenses: 0, profit: 0 }
-      trends[month].expenses += purchase.amount
-    })
-
-    // 处理支出数据
-    expenses.forEach(expense => {
-      const month = new Date(expense.expense_date).toISOString().slice(0, 7)
-      if (!trends[month]) trends[month] = { revenue: 0, expenses: 0, profit: 0 }
-      trends[month].expenses += expense.amount
-    })
-
-    // 计算利润
-    Object.keys(trends).forEach(month => {
-      trends[month].profit = trends[month].revenue - trends[month].expenses
-    })
-
-    return Object.entries(trends)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-12) // 最近12个月
-      .map(([month, data]) => ({ month, ...data }))
-  }
-
-  private calculateHealthTrends(healthRecords: any[]) {
-    const trends: Record<string, { treatments: number; vaccinations: number; checkups: number }> = {}
-    
-    healthRecords.forEach(record => {
-      const month = new Date(record.date).toISOString().slice(0, 7)
-      if (!trends[month]) trends[month] = { treatments: 0, vaccinations: 0, checkups: 0 }
-      
-      switch (record.type) {
-        case 'treatment':
-          trends[month].treatments++
-          break
-        case 'vaccination':
-          trends[month].vaccinations++
-          break
-        case 'checkup':
-          trends[month].checkups++
-          break
+        id: dog.id,
+        name: dog.name,
+        breed: dog.breed,
+        gender: dog.gender,
+        birth_date: dog.birth_date,
+        purchase_date: dogPurchases[0]?.purchase_date,
+        purchase_price: dogPurchases[0]?.amount,
+        sale_date: dogSales[0]?.sale_date,
+        sale_price: dogSales[0]?.amount,
+        status: dog.status,
+        age_months: ageMonths,
+        weight: dog.weight,
+        health_score: calculateHealthScore(dogHealth),
+        last_health_check: dogHealth.sort((a, b) => new Date(b.record_date).getTime() - new Date(a.record_date).getTime())[0]?.record_date,
+        vaccination_records: vaccinationRecords,
+        breeding_records: breedingRecords,
+        financial_records: financialRecords
       }
     })
 
-    return Object.entries(trends)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-6) // 最近6个月
-      .map(([month, data]) => ({ month, ...data }))
-  }
-
-  private calculateBreedingTrends(litters: any[]) {
-    const trends: Record<string, { births: number; pregnancies: number }> = {}
-    
-    litters.forEach(litter => {
-      const matingMonth = new Date(litter.mating_date).toISOString().slice(0, 7)
-      if (!trends[matingMonth]) trends[matingMonth] = { births: 0, pregnancies: 0 }
-      trends[matingMonth].pregnancies++
-      
-      if (litter.birth_date) {
-        const birthMonth = new Date(litter.birth_date).toISOString().slice(0, 7)
-        if (!trends[birthMonth]) trends[birthMonth] = { births: 0, pregnancies: 0 }
-        trends[birthMonth].births++
-      }
-    })
-
-    return Object.entries(trends)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-12) // 最近12个月
-      .map(([month, data]) => ({ month, ...data }))
-  }
-
-  private categorizeHealthIssue(description: string): string {
-    const lowerDesc = description.toLowerCase()
-    if (lowerDesc.includes('皮肤') || lowerDesc.includes('皮炎')) return '皮肤疾病'
-    if (lowerDesc.includes('消化') || lowerDesc.includes('腹泻') || lowerDesc.includes('呕吐')) return '消化系统'
-    if (lowerDesc.includes('呼吸') || lowerDesc.includes('咳嗽')) return '呼吸系统'
-    if (lowerDesc.includes('眼') || lowerDesc.includes('眼睛')) return '眼部疾病'
-    if (lowerDesc.includes('关节') || lowerDesc.includes('骨')) return '骨关节'
-    if (lowerDesc.includes('感冒') || lowerDesc.includes('发烧')) return '感冒发烧'
-    return '其他'
-  }
-
-  private calculateAverageTimeToSale(sales: any[], dogs: any[]): number {
-    let totalDays = 0
-    let count = 0
-
-    sales.forEach(sale => {
-      const dog = dogs.find(d => d.id === sale.dog_id)
-      if (dog) {
-        const createTime = new Date(dog.created_at).getTime()
-        const saleTime = new Date(sale.sale_date).getTime()
-        const days = (saleTime - createTime) / (1000 * 60 * 60 * 24)
-        if (days > 0) {
-          totalDays += days
-          count++
+    // 2. 繁育分析数据
+    const breedingAnalysis: BreedingAnalysis = {
+      female_dogs: dogsDetail.filter(dog => dog.gender === 'female').map(dog => {
+        const lastHeat = estimateLastHeatCycle(dog.breeding_records, dog.age_months)
+        const nextHeat = estimateNextHeatCycle(lastHeat, dog.age_months)
+        const pregnancyInfo = getCurrentPregnancyInfo(dog.breeding_records, dogs)
+        
+        return {
+          id: dog.id,
+          name: dog.name,
+          breed: dog.breed,
+          age_months: dog.age_months,
+          last_heat_cycle: lastHeat,
+          estimated_next_heat: nextHeat,
+          breeding_status: determineBreedingStatus(dog.age_months, pregnancyInfo),
+          pregnancy_details: pregnancyInfo,
+          breeding_history: getBreedingHistory(dog.breeding_records)
         }
-      }
-    })
-
-    return count > 0 ? Number((totalDays / count).toFixed(1)) : 0
-  }
-
-  private calculateBreedPopularity(dogs: any[], sales: any[]) {
-    const breedStats: Record<string, { count: number; sold: number; totalPrice: number }> = {}
-    
-    dogs.forEach(dog => {
-      if (!breedStats[dog.breed]) {
-        breedStats[dog.breed] = { count: 0, sold: 0, totalPrice: 0 }
-      }
-      breedStats[dog.breed].count++
-    })
-
-    return Object.entries(breedStats)
-      .map(([breed, stats]) => ({
-        breed,
-        count: stats.count,
-        averagePrice: stats.sold > 0 ? Number((stats.totalPrice / stats.sold).toFixed(2)) : 0
+      }),
+      male_dogs: dogsDetail.filter(dog => dog.gender === 'male').map(dog => ({
+        id: dog.id,
+        name: dog.name,
+        breed: dog.breed,
+        age_months: dog.age_months,
+        breeding_status: dog.age_months < 8 ? 'too_young' : dog.age_months > 96 ? 'retired' : 'available',
+        breeding_history: getBreedingHistory(dog.breeding_records)
       }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10) // 前10个品种
-  }
+    }
 
-  private calculateSeasonalTrends(sales: any[]): Record<string, number> {
-    const seasons = { spring: 0, summer: 0, autumn: 0, winter: 0 }
+    // 3. 财务分析数据
+    const financialAnalysis: FinancialAnalysis = {
+      dogs_financial: dogsDetail.map(dog => {
+        const totalExpenses = dog.financial_records
+          .filter(r => r.type === 'expense')
+          .reduce((sum, r) => sum + r.amount, 0)
+        
+        const purchasePrice = dog.purchase_price || 0
+        const salePrice = dog.sale_price || 0
+        const profitLoss = salePrice - purchasePrice - totalExpenses
+        const roi = purchasePrice > 0 ? ((profitLoss / purchasePrice) * 100) : 0
+
+        return {
+          id: dog.id,
+          name: dog.name,
+          breed: dog.breed,
+          purchase_price: purchasePrice,
+          sale_price: salePrice,
+          current_market_value: estimateMarketValue(dog.breed, dog.age_months, dog.gender),
+          total_expenses: totalExpenses,
+          profit_loss: profitLoss,
+          roi_percentage: roi,
+          expense_breakdown: categorizeExpenses(dog.financial_records),
+          monthly_costs: getMonthlyExpenses(dog.financial_records)
+        }
+      }),
+      breeding_profitability: calculateBreedingProfitability(litters, dogs, sales, expenses)
+    }
+
+    // 4. 健康分析数据
+    const healthAnalysis: HealthAnalysis = {
+      dogs_health: dogsDetail.map(dog => ({
+        id: dog.id,
+        name: dog.name,
+        breed: dog.breed,
+        age_months: dog.age_months,
+        health_status: assessHealthStatus(dog.health_score, dog.age_months),
+        vaccination_status: analyzeVaccinationStatus(dog.vaccination_records, dog.age_months),
+        health_records: dog.vaccination_records.map(v => ({
+          date: v.date,
+          type: 'vaccination',
+          description: v.vaccine_type,
+          veterinarian: v.veterinarian,
+          cost: v.cost
+        })),
+        upcoming_care: generateUpcomingCare(dog.vaccination_records, dog.age_months, dog.health_score)
+      }))
+    }
+
+    const result = {
+      collection_time: new Date().toISOString(),
+      summary: {
+        total_dogs: dogs.length,
+        female_dogs: dogs.filter(d => d.gender === 'female').length,
+        male_dogs: dogs.filter(d => d.gender === 'male').length,
+        active_breeding_females: breedingAnalysis.female_dogs.filter(f => f.breeding_status === 'available').length,
+        pregnant_females: breedingAnalysis.female_dogs.filter(f => f.breeding_status === 'pregnant').length,
+        total_revenue: sales.reduce((sum, s) => sum + (s.amount || 0), 0),
+        total_expenses: expenses.reduce((sum, e) => sum + (e.amount || 0), 0),
+        health_alerts: healthAnalysis.dogs_health.filter(h => h.upcoming_care.some(c => c.priority === 'urgent')).length
+      },
+      dogs_detail: dogsDetail,
+      breeding_analysis: breedingAnalysis,
+      financial_analysis: financialAnalysis,
+      health_analysis: healthAnalysis
+    }
+
+    console.log('✅ 全面数据收集完成')
+    console.log(`📋 数据摘要: ${dogs.length}只狗狗, ${breedingAnalysis.female_dogs.length}只母狗, ${breedingAnalysis.male_dogs.length}只公狗`)
     
-    sales.forEach(sale => {
-      const month = new Date(sale.sale_date).getMonth() + 1
-      if (month >= 3 && month <= 5) seasons.spring++
-      else if (month >= 6 && month <= 8) seasons.summer++
-      else if (month >= 9 && month <= 11) seasons.autumn++
-      else seasons.winter++
-    })
+    return result
 
-    return seasons
-  }
-
-  private getEmptyOverview() {
-    return {
-      totalDogs: 0,
-      activeDogs: 0,
-      soldDogs: 0,
-      forSaleDogs: 0,
-      averageAge: 0,
-      breedDistribution: {}
-    }
-  }
-
-  private getEmptyHealthData() {
-    return {
-      totalHealthRecords: 0,
-      vaccinationCoverage: 0,
-      treatmentCosts: 0,
-      commonHealthIssues: {},
-      averageHealthCostPerDog: 0,
-      recentHealthTrends: []
-    }
-  }
-
-  private getEmptyBreedingData() {
-    return {
-      totalLitters: 0,
-      activePregnancies: 0,
-      completedBirths: 0,
-      averageLitterSize: 0,
-      breedingSuccessRate: 0,
-      monthlyBirths: []
-    }
+  } catch (error) {
+    console.error('❌ 数据收集失败:', error)
+    throw error
   }
 }
 
-export const dataCollector = new DataCollector()
+// 辅助函数
+function calculateNextVaccination(vaccineType: string, lastDate: string): string {
+  const last = new Date(lastDate)
+  const intervals: { [key: string]: number } = {
+    '狂犬病': 365,
+    'DHPP': 365,
+    '犬瘟': 365,
+    '细小': 365,
+    '传染性肝炎': 365,
+    '副流感': 365,
+    '犬窝咳': 365,
+    '莱姆病': 365,
+    '钩端螺旋体': 365
+  }
+  
+  const interval = intervals[vaccineType] || 365
+  const nextDate = new Date(last.getTime() + interval * 24 * 60 * 60 * 1000)
+  return nextDate.toISOString().split('T')[0]
+}
+
+function calculateHealthScore(healthRecords: any[]): number {
+  if (healthRecords.length === 0) return 70
+  
+  const recentRecords = healthRecords
+    .filter(r => new Date(r.record_date) > new Date(Date.now() - 90 * 24 * 60 * 60 * 1000))
+  
+  let score = 80
+  const vaccinationCount = recentRecords.filter(r => r.record_type === 'vaccination').length
+  const treatmentCount = recentRecords.filter(r => r.record_type === 'treatment').length
+  
+  score += Math.min(vaccinationCount * 5, 20)
+  score -= Math.min(treatmentCount * 10, 30)
+  
+  return Math.max(0, Math.min(100, score))
+}
+
+function estimateLastHeatCycle(breedingRecords: any[], ageMonths: number): string | undefined {
+  const matingRecords = breedingRecords.filter(r => r.type === 'mating')
+  if (matingRecords.length > 0) {
+    const lastMating = matingRecords.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+    return lastMating.date
+  }
+  
+  if (ageMonths >= 6) {
+    const estimatedDate = new Date()
+    estimatedDate.setMonth(estimatedDate.getMonth() - Math.floor(Math.random() * 6) - 1)
+    return estimatedDate.toISOString().split('T')[0]
+  }
+  
+  return undefined
+}
+
+function estimateNextHeatCycle(lastHeat: string | undefined, ageMonths: number): string | undefined {
+  if (!lastHeat || ageMonths < 6) return undefined
+  
+  const last = new Date(lastHeat)
+  const nextCycle = new Date(last.getTime() + (6 * 30.44 * 24 * 60 * 60 * 1000))
+  return nextCycle.toISOString().split('T')[0]
+}
+
+function getCurrentPregnancyInfo(breedingRecords: any[], allDogs: any[]): any {
+  const pregnancyRecord = breedingRecords
+    .filter(r => r.type === 'mating' && !r.actual_date)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+  
+  if (!pregnancyRecord) return undefined
+  
+  const matingDate = new Date(pregnancyRecord.date)
+  const expectedBirth = new Date(matingDate.getTime() + (63 * 24 * 60 * 60 * 1000))
+  const daysPregnant = Math.floor((Date.now() - matingDate.getTime()) / (24 * 60 * 60 * 1000))
+  
+  if (daysPregnant > 70) return undefined
+  
+  const partner = allDogs.find(d => d.id === pregnancyRecord.partner_id)
+  
+  return {
+    mating_date: pregnancyRecord.date,
+    expected_birth: expectedBirth.toISOString().split('T')[0],
+    current_stage: getPregnancyStage(daysPregnant),
+    days_pregnant: daysPregnant,
+    partner_info: partner ? {
+      id: partner.id,
+      name: partner.name,
+      breed: partner.breed
+    } : null
+  }
+}
+
+function getPregnancyStage(days: number): string {
+  if (days < 21) return '早期妊娠'
+  if (days < 42) return '中期妊娠'
+  if (days < 63) return '晚期妊娠'
+  return '临产期'
+}
+
+function determineBreedingStatus(ageMonths: number, pregnancyInfo: any): 'available' | 'pregnant' | 'nursing' | 'too_young' | 'too_old' {
+  if (ageMonths < 6) return 'too_young'
+  if (ageMonths > 96) return 'too_old'
+  if (pregnancyInfo) return 'pregnant'
+  return 'available'
+}
+
+function getBreedingHistory(breedingRecords: any[]): any[] {
+  return breedingRecords
+    .filter(r => r.type === 'birth')
+    .map(r => ({
+      date: r.date,
+      partner: r.partner_name || '未知',
+      outcome: r.puppies_count > 0 ? '成功' : '失败',
+      puppies_count: r.puppies_count
+    }))
+}
+
+function estimateMarketValue(breed: string, ageMonths: number, gender: string): number {
+  const baseValues: { [key: string]: number } = {
+    '金毛': 3000,
+    '拉布拉多': 2800,
+    '德牧': 3500,
+    '泰迪': 2000,
+    '比熊': 2200,
+    '萨摩耶': 3200
+  }
+  
+  let value = baseValues[breed] || 2500
+  
+  if (ageMonths < 3) value *= 1.2
+  else if (ageMonths < 12) value *= 1.0
+  else if (ageMonths < 24) value *= 0.8
+  else value *= 0.6
+  
+  if (gender === 'female' && ageMonths >= 6 && ageMonths <= 60) value *= 1.1
+  
+  return Math.round(value)
+}
+
+function categorizeExpenses(financialRecords: any[]): any {
+  const expenses = financialRecords.filter(r => r.type === 'expense')
+  const categories = {
+    food: 0,
+    healthcare: 0,
+    breeding: 0,
+    grooming: 0,
+    other: 0
+  }
+  
+  expenses.forEach(expense => {
+    const category = expense.category?.toLowerCase() || 'other'
+    if (category.includes('食') || category.includes('粮')) categories.food += expense.amount
+    else if (category.includes('医') || category.includes('疫苗') || category.includes('治疗')) categories.healthcare += expense.amount
+    else if (category.includes('配种') || category.includes('繁殖')) categories.breeding += expense.amount
+    else if (category.includes('美容') || category.includes('洗澡')) categories.grooming += expense.amount
+    else categories.other += expense.amount
+  })
+  
+  return categories
+}
+
+function getMonthlyExpenses(financialRecords: any[]): any[] {
+  const expenses = financialRecords.filter(r => r.type === 'expense')
+  const monthlyMap = new Map()
+  
+  expenses.forEach(expense => {
+    const month = expense.date.substring(0, 7)
+    if (!monthlyMap.has(month)) {
+      monthlyMap.set(month, { month, amount: 0, category: expense.category || 'other' })
+    }
+    monthlyMap.get(month).amount += expense.amount
+  })
+  
+  return Array.from(monthlyMap.values()).sort((a, b) => a.month.localeCompare(b.month))
+}
+
+function calculateBreedingProfitability(litters: any[], dogs: any[], sales: any[], expenses: any[]): any[] {
+  return litters.map(litter => {
+    const mother = dogs.find(d => d.id === litter.mother_id)
+    const father = dogs.find(d => d.id === litter.father_id)
+    const litterSales = sales.filter(s => s.litter_id === litter.id)
+    const litterExpenses = expenses.filter(e => e.litter_id === litter.id)
+    
+    const totalRevenue = litterSales.reduce((sum, s) => sum + (s.amount || 0), 0)
+    const totalCosts = litterExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
+    
+    return {
+      litter_id: litter.id,
+      mother_name: mother?.name || '未知',
+      father_name: father?.name || '未知',
+      birth_date: litter.birth_date,
+      puppies_count: litter.puppies_count || 0,
+      puppies_sold: litterSales.length,
+      total_revenue: totalRevenue,
+      total_costs: totalCosts,
+      net_profit: totalRevenue - totalCosts,
+      cost_per_puppy: litter.puppies_count > 0 ? totalCosts / litter.puppies_count : 0,
+      average_sale_price: litterSales.length > 0 ? totalRevenue / litterSales.length : 0
+    }
+  })
+}
+
+function assessHealthStatus(healthScore: number | undefined, ageMonths: number): 'excellent' | 'good' | 'fair' | 'poor' | 'critical' {
+  const score = healthScore || 70
+  if (score >= 90) return 'excellent'
+  if (score >= 80) return 'good'
+  if (score >= 70) return 'fair'
+  if (score >= 60) return 'poor'
+  return 'critical'
+}
+
+function analyzeVaccinationStatus(vaccinations: any[], ageMonths: number): any {
+  const coreVaccines = {
+    rabies: { last_date: '', next_due: '', status: 'overdue' as 'current' | 'due' | 'overdue' },
+    dhpp: { last_date: '', next_due: '', status: 'overdue' as 'current' | 'due' | 'overdue' },
+    bordetella: { last_date: '', next_due: '', status: 'overdue' as 'current' | 'due' | 'overdue' }
+  }
+  
+  vaccinations.forEach(vac => {
+    const type = vac.vaccine_type.toLowerCase()
+    if (type.includes('狂犬')) {
+      coreVaccines.rabies.last_date = vac.date
+      coreVaccines.rabies.next_due = vac.next_due || ''
+      coreVaccines.rabies.status = new Date(vac.next_due) > new Date() ? 'current' : 'due'
+    } else if (type.includes('dhpp') || type.includes('犬瘟') || type.includes('细小')) {
+      coreVaccines.dhpp.last_date = vac.date
+      coreVaccines.dhpp.next_due = vac.next_due || ''
+      coreVaccines.dhpp.status = new Date(vac.next_due) > new Date() ? 'current' : 'due'
+    } else if (type.includes('犬窝咳') || type.includes('博德特氏菌')) {
+      coreVaccines.bordetella.last_date = vac.date
+      coreVaccines.bordetella.next_due = vac.next_due || ''
+      coreVaccines.bordetella.status = new Date(vac.next_due) > new Date() ? 'current' : 'due'
+    }
+  })
+  
+  return {
+    core_vaccines: coreVaccines,
+    optional_vaccines: vaccinations
+      .filter(v => !['狂犬', 'dhpp', '犬瘟', '细小', '犬窝咳'].some(core => v.vaccine_type.toLowerCase().includes(core)))
+      .map(v => ({
+        type: v.vaccine_type,
+        last_date: v.date,
+        next_due: v.next_due || '',
+        status: new Date(v.next_due) > new Date() ? 'current' as const : 'due' as const
+      }))
+  }
+}
+
+function generateUpcomingCare(vaccinations: any[], ageMonths: number, healthScore: number | undefined): any[] {
+  const upcoming = []
+  const score = healthScore || 70
+  
+  vaccinations.forEach(vac => {
+    if (vac.next_due && new Date(vac.next_due) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)) {
+      upcoming.push({
+        type: 'vaccination',
+        due_date: vac.next_due,
+        description: `${vac.vaccine_type}疫苗接种`,
+        estimated_cost: 150,
+        priority: new Date(vac.next_due) <= new Date() ? 'urgent' as const : 'important' as const
+      })
+    }
+  })
+  
+  if (score < 70) {
+    upcoming.push({
+      type: 'checkup',
+      due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      description: '健康检查（健康评分偏低）',
+      estimated_cost: 200,
+      priority: 'urgent' as const
+    })
+  }
+  
+  return upcoming.sort((a, b) => a.due_date.localeCompare(b.due_date))
+}
